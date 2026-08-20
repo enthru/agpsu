@@ -10,12 +10,10 @@ constant current: the readout across the top, the instrument's facts in the
 strip below it, the control boxes in two columns on the left, and the live
 voltage trace over the event list on the right](screen.jpg)
 
-**Пользоваться программой:** [руководство на русском](docs/guide.ru.md) — от
-кабеля и настроек порта до защит, строки меню и Shortcuts.
-
-There is a user guide in Russian at [docs/guide.ru.md](docs/guide.ru.md); this
-README covers how the thing is built and why. The application itself, its help
-windows and every identifier in the source are in English.
+**User guide:** [English](docs/guide.en.md) · [русский](docs/guide.ru.md) —
+from the cable and the port settings through to the protections, the menu bar and
+Shortcuts. This README covers how the thing is built and why; the guide covers
+using it.
 
 Companion project: [agmult](https://github.com/enthru/agmult), the same treatment for the 34401A
 multimeter. Between them, a shortcut can sweep a supply and read a meter.
