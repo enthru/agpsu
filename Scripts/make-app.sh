@@ -1,0 +1,134 @@
+#!/bin/bash
+# Builds AgilentPSU.app from the Swift package.
+#
+# Swift Package Manager produces a bare executable; macOS wants an application
+# bundle for a proper Dock icon, menu bar and window restoration. This assembles
+# one around the built binary.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIGURATION="${1:-release}"
+APP="$ROOT/build/AgilentPSU.app"
+
+cd "$ROOT"
+echo "Building ($CONFIGURATION)…"
+swift build -c "$CONFIGURATION" --product AgilentPSU
+swift build -c "$CONFIGURATION" --product agpsu-sim
+
+BINARY="$(swift build -c "$CONFIGURATION" --product AgilentPSU --show-bin-path)/AgilentPSU"
+SIMULATOR="$(swift build -c "$CONFIGURATION" --product agpsu-sim --show-bin-path)/agpsu-sim"
+
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+cp "$BINARY" "$APP/Contents/MacOS/AgilentPSU"
+cp "$SIMULATOR" "$APP/Contents/MacOS/agpsu-sim"
+
+cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>AgilentPSU</string>
+    <key>CFBundleDisplayName</key>
+    <string>System DC Power Supply</string>
+    <key>CFBundleExecutable</key>
+    <string>AgilentPSU</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.agpsu.AgilentPSU</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>
+PLIST
+
+# App Intents metadata — what makes the intents in Intents.swift visible to
+# Shortcuts, Spotlight and Siri.
+#
+# Xcode generates this from a build phase that Swift Package Manager has no
+# equivalent of, so the two steps it does are done by hand here: the compiler
+# writes out the compile-time constants of every type conforming to an App
+# Intents protocol, and appintentsmetadataprocessor turns those into the
+# Metadata.appintents bundle the system reads. Both tools ship inside Xcode
+# rather than the command line tools, so a machine without it still gets a
+# working app — just one Shortcuts cannot see.
+TOOLCHAIN="$(xcode-select -p 2>/dev/null)/Toolchains/XcodeDefault.xctoolchain"
+PROTOCOLS_SOURCE="$TOOLCHAIN/usr/share/swift/SwiftConstantValues/AppIntents.json"
+PROCESSOR="$TOOLCHAIN/usr/bin/appintentsmetadataprocessor"
+
+if [[ -x "$PROCESSOR" && -f "$PROTOCOLS_SOURCE" ]]; then
+    echo "Extracting App Intents metadata…"
+    WORK="$(mktemp -d)"
+    trap 'rm -rf "$WORK"' EXIT
+
+    # The compiler wants a bare array of protocol names; the toolchain ships the
+    # same list wrapped in an object with a version alongside it.
+    /usr/bin/python3 -c 'import json,sys; json.dump(json.load(open(sys.argv[1]))["constValueProtocols"], open(sys.argv[2], "w"))' \
+        "$PROTOCOLS_SOURCE" "$WORK/protocols.json"
+
+    MODULE_SOURCES=("$ROOT"/Sources/AgilentPSUKit/*.swift)
+    OTHER_SOURCES=()
+    for source in "${MODULE_SOURCES[@]}"; do
+        [[ "$source" == *"/Intents.swift" ]] || OTHER_SOURCES+=("$source")
+    done
+
+    # One frontend job over the module with Intents.swift as the primary file.
+    # Constants are gathered per primary file, and that is the only file with
+    # anything to gather.
+    "$TOOLCHAIN/usr/bin/swiftc" -frontend -c \
+        -primary-file "$ROOT/Sources/AgilentPSUKit/Intents.swift" "${OTHER_SOURCES[@]}" \
+        -o "$WORK/Intents.o" \
+        -module-name AgilentPSUKit -swift-version 5 \
+        -sdk "$(xcrun --show-sdk-path)" \
+        -target "$(uname -m)-apple-macos14.0" \
+        -I "$(dirname "$BINARY")/Modules" \
+        -plugin-path "$TOOLCHAIN/usr/lib/swift/host/plugins" \
+        -const-gather-protocols-file "$WORK/protocols.json" \
+        -emit-const-values-path "$WORK/Intents.swiftconstvalues" \
+        >/dev/null 2>&1
+
+    if [[ -f "$WORK/Intents.swiftconstvalues" ]]; then
+        printf '%s\n' "${MODULE_SOURCES[@]}" > "$WORK/sources.txt"
+        echo "$WORK/Intents.swiftconstvalues" > "$WORK/constvals.txt"
+
+        "$PROCESSOR" \
+            --output "$APP/Contents/Resources" \
+            --toolchain-dir "$TOOLCHAIN" \
+            --module-name AgilentPSUKit \
+            --sdk-root "$(xcrun --show-sdk-path)" \
+            --xcode-version "$(xcodebuild -version | tail -1 | awk '{print $3}')" \
+            --platform-family macOS \
+            --deployment-target 14.0 \
+            --target-triple "$(uname -m)-apple-macos14.0" \
+            --source-file-list "$WORK/sources.txt" \
+            --swift-const-vals-list "$WORK/constvals.txt" \
+            --force
+    else
+        echo "  skipped: the compiler produced no constant values"
+    fi
+else
+    echo "App Intents metadata skipped — needs a full Xcode, not just the command line tools."
+    echo "  The app works; Shortcuts will not list its actions."
+fi
+
+# An ad-hoc signature is enough to run locally and keeps macOS from complaining
+# about a broken bundle after the binaries were copied in. It goes last: the
+# metadata bundle above is part of what gets signed.
+codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
+
+echo "Built $APP"
+echo "Run it with: open '$APP'"
