@@ -35,6 +35,13 @@ struct SerialHelpView: View {
 struct GeneralHelpView: View {
     var body: some View {
         HelpScroll(title: "General Help") {
+            HelpSection("The window") {
+                Text("Top to bottom: the readout, a strip carrying the instrument's own facts — model, ratings, port, polling rate and the last entry from its error queue — and then a split, controls on the left and the live trace over the event list on the right. Every divider can be dragged.")
+                Text("The five control boxes take two columns when the pane is wide enough and one when it is not, so nothing is hidden below the fold on a normal window. When something is, the column grows a scroll bar and keeps it: an area that cannot scroll does not show one, so an empty margin means there is genuinely nothing else.")
+                Text("The trace is the graph window in miniature — same colours, same theme, same markers — with a switch for voltage, current or power and a button that opens the full window with its export and settings.")
+                Text("Anything the application refuses to do, such as an OVP above the supply's rating, is said in orange in the strip under the readout rather than only in the event list.")
+            }
+
             HelpSection("Keyboard shortcuts") {
                 ShortcutTable(rows: [
                     .init(keys: "\u{2318},", meaning: "Settings"),
@@ -63,7 +70,7 @@ struct GeneralHelpView: View {
                 Text("Voltage / Current / Power Auto Range — chooses when the readout switches to milli-units.")
             }
             HelpSection("Graphs") {
-                Text("Up to three live graphs. Each keeps its own history, whose size is set per graph from 50K to 2M samples. Curves are decimated for drawing so that even a 2M-sample history stays responsive; Save Data exports every retained sample.")
+                Text("The trace in the main window plus three windows of their own. Each keeps its own history, whose size is set per graph from 50K to 2M samples. Curves are decimated for drawing so that even a 2M-sample history stays responsive; Save Data exports every retained sample.")
             }
             HelpSection("Output and protection") {
                 Text("The Voltage and Current boxes set the supply's output. The Output box turns the output on and off and holds UVP and UCP.")

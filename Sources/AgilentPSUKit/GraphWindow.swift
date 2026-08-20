@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 import AppKit
 import UniformTypeIdentifiers
 import PSUCore
@@ -50,125 +49,19 @@ struct GraphWindow: View {
 
     private var samples: [PSUSample] { history.decimated() }
 
-    @ViewBuilder
     private var chart: some View {
-        Chart {
-            ForEach(samples) { sample in
-                LineMark(
-                    x: .value(settings.xAxis.title, xValue(for: sample)),
-                    y: .value(kind.title, sample.value)
-                )
-                .foregroundStyle(settings.curveColor.color)
-                .interpolationMethod(.linear)
-
-                if settings.showPoints {
-                    PointMark(
-                        x: .value(settings.xAxis.title, xValue(for: sample)),
-                        y: .value(kind.title, sample.value)
-                    )
-                    .foregroundStyle(settings.curveColor.color)
-                    .symbolSize(12)
-                }
-            }
-
-            ForEach(markers, id: \.label) { marker in
-                RuleMark(y: .value(marker.label, marker.value))
-                    .foregroundStyle(marker.color)
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            }
-
-            // The labels in a second pass, carried by rules that draw nothing.
-            //
-            // Swift Charts paints marks in the order they are declared,
-            // annotations included, so a label written beside the first rule is
-            // struck through by the second rule's dashes — and on a
-            // well-adjusted supply OVP sits a hundred millivolts above the set
-            // point, close enough for exactly that. Every label after every
-            // line, and each gets the plot's own background behind it, opaque:
-            // the set point is the marker most worth reading and it is precisely
-            // where the curve spends its time.
-            //
-            // Alternating sides keeps two close markers off each other, and
-            // `fitToPlot` keeps the topmost one from being cut against the edge.
-            ForEach(Array(markers.enumerated()), id: \.element.label) { index, marker in
-                RuleMark(y: .value(marker.label, marker.value))
-                    .foregroundStyle(.clear)
-                    .annotation(position: .top,
-                                alignment: index.isMultiple(of: 2) ? .leading : .trailing,
-                                spacing: 2,
-                                overflowResolution: .init(x: .fit(to: .plot), y: .fit(to: .plot))) {
-                        Text(marker.label)
-                            .font(.caption2)
-                            .foregroundStyle(marker.color)
-                            .padding(.horizontal, 3)
-                            .padding(.vertical, 1)
-                            .background(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(settings.plotBackground.color)
-                            )
-                    }
-            }
-        }
-        .chartYScale(domain: yDomain)
-        .chartYAxis {
-            // Swift Charts puts the value axis on the trailing edge by default;
-            // instrument graphs read better with it on the left, as ScottPlot drew it.
-            AxisMarks(position: .leading)
-        }
-        .chartPlotStyle { plot in
-            plot.background(settings.plotBackground.color)
-        }
-        .chartXAxisLabel(settings.xAxis.title)
-        .chartYAxisLabel(position: .leading) { Text("\(kind.title) ( \(kind.unit) )") }
+        SeriesChart(samples: samples,
+                    bounds: history.bounds,
+                    unit: kind.unit,
+                    seriesName: kind.title,
+                    settings: settings,
+                    markers: markers)
     }
 
-    private func xValue(for sample: PSUSample) -> Double {
-        switch settings.xAxis {
-        case .sampleNumber: return Double(sample.index)
-        case .time: return sample.timestamp.timeIntervalSince(history.samples.first?.timestamp ?? sample.timestamp)
-        }
-    }
-
-    private var yDomain: ClosedRange<Double> {
-        guard settings.autoAxis else {
-            let lower = min(settings.manualMinimum, settings.manualMaximum)
-            let upper = max(settings.manualMinimum, settings.manualMaximum)
-            return lower...(upper > lower ? upper : lower + 1)
-        }
-        var lowest = history.minimum ?? 0
-        var highest = history.maximum ?? 1
-        for marker in markers {
-            lowest = min(lowest, marker.value)
-            highest = max(highest, marker.value)
-        }
-        if highest - lowest < 0.001 {
-            lowest -= 0.5
-            highest += 0.5
-        }
-        let margin = (highest - lowest) * 0.08
-        return (lowest - margin)...(highest + margin)
-    }
-
-    private struct Marker {
-        let label: String
-        let value: Double
-        let color: Color
-    }
-
-    /// Set point, OVP and UVP reference lines — only meaningful on the voltage graph.
-    private var markers: [Marker] {
-        guard kind == .voltage else { return [] }
-        var result: [Marker] = []
-        if settings.showSetMarker, let value = controller.setVoltageReadback {
-            result.append(Marker(label: "Set \(Format.number(value, 3))V", value: value, color: .green))
-        }
-        if settings.showOVPMarker, let value = controller.ovpLevel {
-            result.append(Marker(label: "OVP \(Format.number(value, 2))V", value: value, color: .red))
-        }
-        if settings.showUVPMarker, let value = controller.uvpLevel {
-            result.append(Marker(label: "UVP \(Format.number(value, 3))V", value: value, color: .orange))
-        }
-        return result
+    /// Set point, OVP and UVP reference lines — only meaningful on the voltage
+    /// graph, and the same set the trace in the main window draws.
+    private var markers: [ChartMarker] {
+        GraphMarkers.forVoltage(kind: kind, settings: settings, controller: controller)
     }
 
     private var informationPanel: some View {

@@ -57,9 +57,66 @@ final class InterfaceRenderTests: XCTestCase {
     /// still worth doing: it evaluates every view body and binding, which is
     /// where a mis-wired key path or a missing environment value would show up.
     func testMainWindowBuildsAndRenders() throws {
-        let image = try render(MainView().environment(model), size: CGSize(width: 900, height: 720))
+        let image = try render(MainView().environment(model), size: CGSize(width: 1200, height: 800))
         XCTAssertGreaterThan(image.size.width, 0)
         try write(image, named: "main-window.png")
+    }
+
+    /// The controls have to fit the pane the default window gives them without
+    /// scrolling — which is the whole point of arranging them in a grid.
+    func testControlGridFitsThePaneItIsGiven() throws {
+        // Left pane of a 1200-wide window, minus the readout, strip and status
+        // bar from an 800-tall one.
+        let pane = CGSize(width: 640, height: 560)
+        try write(try render(ControlGrid().environment(model), size: pane), named: "control-grid.png")
+
+        let needed = height(ofControlsAtWidth: pane.width)
+        XCTAssertLessThanOrEqual(needed, pane.height,
+                                 "the controls want \(needed) points and have \(pane.height)")
+    }
+
+    /// The panels were tightened until two columns fit the pane the window
+    /// actually gives them: the rows used to carry a 190-point label spelling
+    /// "UVP (UnderVoltage Protection):" out in full, which by itself was two
+    /// thirds of a column.
+    func testControlsCollapseToOneColumnWhenNarrow() throws {
+        let narrow = height(ofControlsAtWidth: 330)
+        let wide = height(ofControlsAtWidth: 640)
+        XCTAssertGreaterThan(narrow, wide,
+                             "one column (\(narrow)) has to be taller than two (\(wide))")
+    }
+
+    /// Height the control grid needs at a given width.
+    ///
+    /// The width is pinned inside the SwiftUI hierarchy rather than on the
+    /// hosting view: `fittingSize` measures the content, and a frame set on the
+    /// AppKit view outside it is not a constraint the layout ever sees.
+    private func height(ofControlsAtWidth width: CGFloat) -> CGFloat {
+        let host = NSHostingView(rootView: ControlGrid().environment(model).frame(width: width))
+        host.layoutSubtreeIfNeeded()
+        return host.fittingSize.height
+    }
+
+    /// The scrolling column has to build and render whether or not its content
+    /// overflows — the scroller is configured on the scroll view SwiftUI makes,
+    /// which only exists once the thing is in a hierarchy.
+    func testScrollingColumnRendersWithAndWithoutOverflow() throws {
+        let cramped = try render(ScrollableColumn { ControlGrid() }.environment(model),
+                                 size: CGSize(width: 330, height: 200))
+        XCTAssertGreaterThan(cramped.size.width, 0)
+        try write(cramped, named: "controls-overflowing.png")
+
+        let roomy = try render(ScrollableColumn { ControlGrid() }.environment(model),
+                               size: CGSize(width: 640, height: 700))
+        XCTAssertGreaterThan(roomy.size.width, 0)
+    }
+
+    /// The facts strip under the readout, which took the place of the Info box.
+    func testInstrumentStripRenders() throws {
+        XCTAssertTrue(model.controller.isConnected)
+        try write(try render(InstrumentStrip().environment(model).frame(width: 900),
+                             size: CGSize(width: 900, height: 40)),
+                  named: "instrument-strip.png")
     }
 
     func testReadoutPanelShowsLiveValues() throws {

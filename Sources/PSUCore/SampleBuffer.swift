@@ -43,6 +43,13 @@ public struct SampleBuffer: Sendable {
     public var isEmpty: Bool { samples.isEmpty }
     public var latest: PSUSample? { samples.last }
 
+    /// The extremes of everything recorded, kept as samples arrive so a chart
+    /// can scale itself without a pass over two million points.
+    public var bounds: ClosedRange<Double>? {
+        guard let minimum, let maximum else { return nil }
+        return minimum...max(minimum, maximum)
+    }
+
     public mutating func append(value: Double, at timestamp: Date) {
         samples.append(PSUSample(index: totalRecorded, timestamp: timestamp, value: value))
         totalRecorded += 1

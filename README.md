@@ -34,7 +34,7 @@ layer, threading model, graphing, simulator and tests are all original.
 
 ```sh
 swift build                  # build everything
-swift test                   # 76 tests, including a full loop against the simulator
+swift test                   # 80 tests, including a full loop against the simulator
 ./Scripts/make-app.sh        # assemble build/AgilentPSU.app
 open build/AgilentPSU.app
 ```
@@ -76,6 +76,12 @@ before they show up.
 
 ## What it does
 
+- **The window** — the readout across the top, the instrument's facts in a strip
+  under it, the controls in a grid that takes two columns when there is width
+  for them, and the right-hand side given over to a live trace over the event
+  list. The controls were five boxes stacked in one narrow column, which meant
+  scrolling past three of them to reach the fourth while half a wide window sat
+  empty.
 - **Live readout** — measured voltage and current, calculated power, set points,
   regulation mode (CV / CC / CVCC / −CC / Dis), protection state. Auto-ranges to
   milli-units, with the same thresholds as the original.
@@ -85,9 +91,11 @@ before they show up.
 - **Protections** — OVP and OCP run inside the supply. UVP and UCP are enforced
   by the application from the measured values, so they act no faster than the
   update rate; the panel and this README both say so, because it matters.
-- **Graphs** — three live windows (voltage, current, power) with per-graph
-  colours, themes, markers for set point / OVP / UVP, sample-number or time
-  x-axis, and PNG / CSV export.
+- **Graphs** — a trace in the main window, plus three windows of their own
+  (voltage, current, power) with per-graph colours, themes, markers for set
+  point / OVP / UVP, sample-number or time x-axis, and PNG / CSV export. Both
+  draw the same `SeriesChart`, so the pane in the window is the graph window in
+  miniature rather than a second drawing that happens to look different.
 - **Logging** — measurements to text or CSV and every event-list entry to text,
   named `date-model-port-…` as on Windows, written to `~/Documents/AgilentPSU`
   or a folder you choose.
@@ -193,7 +201,12 @@ the window.
   are reported individually instead of falling through to "unknown".
 - Graphs use Swift Charts. Long histories are decimated for drawing with the
   minima and maxima preserved, so a 2M-sample graph stays responsive and spikes
-  still show; exports contain every retained sample.
+  still show; exports contain every retained sample. Axis labels are formatted
+  rather than left to the viewer's locale — a comma-decimal Mac would otherwise
+  put "4,19" on the axis above a readout saying "4.190V".
+- The window resizes into its space: two columns of controls when there is width
+  for them, one when there is not, and a scroller that appears only when
+  something is actually below the fold.
 - The "Edit" menu is called **Counters**, which is what it always contained.
 - Log files default to `~/Documents/AgilentPSU` rather than the working
   directory.
@@ -213,6 +226,12 @@ buffer and its decimation, and — over a real serial connection to the simulato
 — identification, set-point read-back, the CV/CC crossover, OVP and OCP trips,
 current-range overload, the error queue, reset, the full controller polling
 loop, soft UVP/UCP tripping, and log-file output.
+
+The layout is tested rather than eyeballed: the control grid is measured with
+`NSHostingView.fittingSize` at the width the default window gives it and has to
+fit without scrolling, and the same measurement at a narrow width has to come
+out taller — proof the two columns collapsed to one rather than silently
+overflowing.
 
 The automation surface is covered without any of it touching the system: the
 alert centre is built with its delivery, its permission request and its "is the
