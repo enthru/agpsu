@@ -45,6 +45,10 @@ open build/AgilentPSU.app
 `swift run AgilentPSU` also works, but the assembled bundle gets a proper Dock
 icon and menu bar.
 
+The icon itself is not in the repository. Put a square `icon.png` in the root and
+`make-app.sh` turns it into the bundle's `.icns`; without one the app takes the
+generic icon and everything else works the same.
+
 ## Trying it without hardware
 
 The package ships a SCPI-speaking simulator of a 6632B. It models the CV/CC
