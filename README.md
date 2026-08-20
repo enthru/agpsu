@@ -12,7 +12,7 @@ There is a user guide in Russian at [docs/guide.ru.md](docs/guide.ru.md); this
 README covers how the thing is built and why. The application itself, its help
 windows and every identifier in the source are in English.
 
-Companion project: [agmult](../agmult), the same treatment for the 34401A
+Companion project: [agmult](https://github.com/enthru/agmult), the same treatment for the 34401A
 multimeter. Between them, a shortcut can sweep a supply and read a meter.
 
 Written from scratch in Swift and SwiftUI. It takes its feature set and panel
@@ -129,7 +129,7 @@ refused here rather than sent down the wire to settle in the error queue.
 
 Step the voltage in a loop and read the current back after each step and you
 have an I-V curve taken by a shortcut rather than by hand; with
-[agmult](../agmult) alongside, one shortcut can drive the supply and read the
+[agmult](https://github.com/enthru/agmult) alongside, one shortcut can drive the supply and read the
 meter. Switching the output *on* from an unattended shortcut puts volts across
 whatever is wired up, which is the point of it for a sweep and worth knowing
 before it runs while nobody is at the bench.
