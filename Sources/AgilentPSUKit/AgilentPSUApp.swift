@@ -27,6 +27,10 @@ struct AgilentPSUApp: App {
                     model.saveNow()
                 }
         }
+        // The split gives each half the same width, so the default window is
+        // sized for what the narrower half needs: two columns of controls. Drag
+        // it smaller and they fold into one, which is what the grid is for.
+        .defaultSize(width: 1280, height: 860)
         .commands {
             AppCommands(model: model)
         }

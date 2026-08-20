@@ -11,8 +11,13 @@ import PSUCore
 struct ControlGrid: View {
     /// Two columns as soon as the pane is wide enough for them, one when it is
     /// not. Nothing here is tall, so wrapping costs nothing and saves the
-    /// scroll. Three hundred is the width the panels were tightened to fit in.
-    private let columns = [GridItem(.adaptive(minimum: 300), spacing: 10, alignment: .top)]
+    /// scroll.
+    ///
+    /// The panels were tightened to fit in 290 points, which is what makes two
+    /// of them fit the half-window the split hands over at the default size —
+    /// 300 fitted by ten points, close enough that a scroller appearing on the
+    /// left would have tipped it into one column.
+    private let columns = [GridItem(.adaptive(minimum: 290), spacing: 10, alignment: .top)]
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 10) {

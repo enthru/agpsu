@@ -30,10 +30,10 @@ struct MainView: View {
 
             HSplitView {
                 ScrollableColumn { ControlGrid() }
-                    .frame(minWidth: 330, idealWidth: 640)
+                    .frame(minWidth: 330, idealWidth: 640, maxWidth: .infinity)
 
                 liveData
-                    .frame(minWidth: 300, idealWidth: 540)
+                    .frame(minWidth: 300, idealWidth: 540, maxWidth: .infinity)
             }
 
             StatusBar()

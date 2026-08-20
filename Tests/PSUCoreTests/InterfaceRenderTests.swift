@@ -62,17 +62,39 @@ final class InterfaceRenderTests: XCTestCase {
         try write(image, named: "main-window.png")
     }
 
+    /// The width of the default window, as declared by the scene.
+    private static let defaultWindow = CGSize(width: 1280, height: 860)
+
     /// The controls have to fit the pane the default window gives them without
     /// scrolling — which is the whole point of arranging them in a grid.
-    func testControlGridFitsThePaneItIsGiven() throws {
-        // Left pane of a 1200-wide window, minus the readout, strip and status
-        // bar from an 800-tall one.
-        let pane = CGSize(width: 640, height: 560)
-        try write(try render(ControlGrid().environment(model), size: pane), named: "control-grid.png")
+    ///
+    /// The width is taken from the split rather than assumed: the two halves
+    /// share the window evenly, and a change to either pane's limits moves the
+    /// divider without anything else noticing.
+    func testControlGridFitsThePaneTheDefaultWindowGivesIt() throws {
+        let paneWidth = try splitPaneWidths(atWindowWidth: Self.defaultWindow.width)[0]
+        // The readout, the strip and the status bar take about 300 points of an
+        // 860-tall window between them.
+        let paneHeight = Self.defaultWindow.height - 300
 
-        let needed = height(ofControlsAtWidth: pane.width)
-        XCTAssertLessThanOrEqual(needed, pane.height,
-                                 "the controls want \(needed) points and have \(pane.height)")
+        try write(try render(ControlGrid().environment(model),
+                             size: CGSize(width: paneWidth, height: paneHeight)),
+                  named: "control-grid.png")
+
+        let needed = height(ofControlsAtWidth: paneWidth)
+        XCTAssertLessThanOrEqual(needed, paneHeight,
+                                 "the controls want \(needed) points and have \(paneHeight)")
+    }
+
+    /// And they have to be in *two* columns there. The pane is half the window,
+    /// so a panel that grew by twenty points would quietly fold the grid into
+    /// one tall column rather than break anything.
+    func testTheDefaultWindowIsWideEnoughForTwoColumns() throws {
+        let paneWidth = try splitPaneWidths(atWindowWidth: Self.defaultWindow.width)[0]
+        let atDefault = height(ofControlsAtWidth: paneWidth)
+        let oneColumn = height(ofControlsAtWidth: 330)
+        XCTAssertLessThan(atDefault, oneColumn,
+                          "the \(paneWidth)-point pane is laying the controls out in one column")
     }
 
     /// The panels were tightened until two columns fit the pane the window
@@ -81,7 +103,7 @@ final class InterfaceRenderTests: XCTestCase {
     /// thirds of a column.
     func testControlsCollapseToOneColumnWhenNarrow() throws {
         let narrow = height(ofControlsAtWidth: 330)
-        let wide = height(ofControlsAtWidth: 640)
+        let wide = height(ofControlsAtWidth: Self.defaultWindow.width / 2)
         XCTAssertGreaterThan(narrow, wide,
                              "one column (\(narrow)) has to be taller than two (\(wide))")
     }
@@ -109,6 +131,51 @@ final class InterfaceRenderTests: XCTestCase {
         let roomy = try render(ScrollableColumn { ControlGrid() }.environment(model),
                                size: CGSize(width: 640, height: 700))
         XCTAssertGreaterThan(roomy.size.width, 0)
+    }
+
+    /// Widening the window has to widen both halves of the split, not just one.
+    ///
+    /// `HSplitView` is an `NSSplitView` underneath and AppKit resizes the pane
+    /// with the lowest holding priority first, so the frames can be read out of
+    /// the hierarchy rather than guessed at from a screenshot.
+    func testBothHalvesOfTheSplitGrowWithTheWindow() throws {
+        let narrow = try splitPaneWidths(atWindowWidth: 1000)
+        let wide = try splitPaneWidths(atWindowWidth: 1400)
+        XCTAssertEqual(narrow.count, 2)
+        XCTAssertEqual(wide.count, 2)
+
+        XCTAssertGreaterThan(wide[1], narrow[1], "the right-hand pane did not grow")
+        XCTAssertGreaterThan(wide[0], narrow[0],
+                             "the controls stayed at \(narrow[0]) points while the window gained 400")
+    }
+
+    /// The widths of the two halves of the main window's horizontal split, laid
+    /// out inside a window of the given width.
+    private func splitPaneWidths(atWindowWidth width: CGFloat) throws -> [CGFloat] {
+        let host = NSHostingView(rootView: MainView().environment(model))
+        host.frame = CGRect(x: 0, y: 0, width: width, height: 820)
+        // A window: NSSplitView only lays its panes out once it is in one.
+        let window = NSWindow(contentRect: host.frame,
+                              styleMask: [.titled, .resizable],
+                              backing: .buffered,
+                              defer: false)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+
+        let split = try XCTUnwrap(Self.horizontalSplitView(in: host), "no side-by-side split view found")
+        return split.arrangedSubviews.map(\.frame.width)
+    }
+
+    /// The side-by-side split, which is the one whose dividers run vertically —
+    /// the other `NSSplitView` in the window is the trace over the event list.
+    private static func horizontalSplitView(in view: NSView) -> NSSplitView? {
+        if let split = view as? NSSplitView, split.isVertical, split.arrangedSubviews.count == 2 {
+            return split
+        }
+        for subview in view.subviews {
+            if let found = horizontalSplitView(in: subview) { return found }
+        }
+        return nil
     }
 
     /// The facts strip under the readout, which took the place of the Info box.
