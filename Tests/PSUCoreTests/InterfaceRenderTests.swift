@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import QuartzCore
 @testable import PSUCore
 @testable import PSUSimulator
 @testable import AgilentPSUKit
@@ -260,6 +261,117 @@ final class InterfaceRenderTests: XCTestCase {
         let image = try render(GraphWindow(kind: .voltage).environment(model),
                                size: CGSize(width: 900, height: 560))
         try write(image, named: "voltage-graph-markers.png")
+    }
+
+    /// Chart axis labels take the environment's foreground colour, which in dark
+    /// mode is white — and every graph theme but one paints a white plot. Both
+    /// axes were being drawn white on white and simply were not there.
+    ///
+    /// The invariant is stronger than "something is visible": the plot and
+    /// figure are colours the user picked, so the chart has to come out the same
+    /// whatever the system appearance is. Rendered in both and compared pixel by
+    /// pixel.
+    func testTheChartDoesNotChangeWithTheSystemAppearance() throws {
+        let settings = model.settings(for: .voltage)
+        settings.apply(theme: .standard)
+        XCTAssertEqual(settings.plotBackground, .white, "the case worth testing is a light plot")
+
+        // Drawn through AppKit rather than `ImageRenderer`, which ignores the
+        // appearance entirely and would have reported the bug as fixed while it
+        // was still there.
+        // One snapshot of the history for both drawings: the simulator is still
+        // polling, and a sample arriving between the two would show up as a
+        // difference that has nothing to do with the appearance.
+        let samples = model.controller.voltageHistory.decimated(into: 200)
+        let bounds = model.controller.voltageHistory.bounds
+
+        let size = CGSize(width: 420, height: 220)
+        let dark = try draw(trace(samples, bounds, settings), size: size, appearance: .darkAqua)
+        let light = try draw(trace(samples, bounds, settings), size: size, appearance: .aqua)
+        let darkImage = NSImage(size: size)
+        darkImage.addRepresentation(dark)
+        try write(darkImage, named: "trace-dark-mode.png")
+        let lightImage = NSImage(size: size)
+        lightImage.addRepresentation(light)
+        try write(lightImage, named: "trace-light-mode.png")
+
+        let differing = try differingFraction(dark, light)
+        XCTAssertLessThan(differing, 0.002,
+                          "\(Int(differing * 1000)) parts per thousand of the chart changed with the appearance — "
+                          + "something in it is taking its colour from the system rather than from the settings")
+    }
+
+    private func trace(_ samples: [PSUSample],
+                       _ bounds: ClosedRange<Double>?,
+                       _ settings: GraphSettings) -> some View {
+        SeriesChart(samples: samples,
+                    bounds: bounds,
+                    unit: "V",
+                    seriesName: "Voltage",
+                    settings: settings,
+                    markers: [ChartMarker(label: "Set 4.190V", value: 4.19, color: .green)])
+            // As the windows draw it. Without this the figure around the plot is
+            // transparent and the comparison is mostly measuring the colour of
+            // the window behind it.
+            .padding(8)
+            .background(settings.figureBackground.color)
+    }
+
+    /// Draws a view the way the screen would, in a chosen appearance.
+    ///
+    /// `ImageRenderer` renders outside any appearance, so a colour taken from
+    /// the environment comes out the same light or dark. An `NSHostingView` in a
+    /// window, told which appearance to wear, is what actually reproduces it.
+    private func draw(_ view: some View, size: CGSize, appearance: NSAppearance.Name) throws -> NSBitmapImageRep {
+        let host = NSHostingView(rootView: view)
+        host.frame = CGRect(origin: .zero, size: size)
+        host.appearance = NSAppearance(named: appearance)
+
+        let window = NSWindow(contentRect: host.frame,
+                              styleMask: [.titled],
+                              backing: .buffered,
+                              defer: false)
+        window.appearance = NSAppearance(named: appearance)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+
+        // SwiftUI draws into layers, and `cacheDisplay` walks the view's own
+        // drawing — which for a hosting view is nothing at all. The layer tree
+        // has to be rendered instead, once it has been given a chance to build.
+        host.wantsLayer = true
+        window.orderBack(nil)
+        host.displayIfNeeded()
+        CATransaction.flush()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        // Layer coordinates run bottom-up; without the flip the written-out
+        // diagnostic images come out upside down.
+        context.cgContext.translateBy(x: 0, y: host.bounds.height)
+        context.cgContext.scaleBy(x: 1, y: -1)
+        try XCTUnwrap(host.layer).render(in: context.cgContext)
+        window.orderOut(nil)
+        return bitmap
+    }
+
+    /// The fraction of pixels that differ between two drawings of the same size.
+    private func differingFraction(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) throws -> Double {
+        XCTAssertEqual(a.pixelsWide, b.pixelsWide)
+        XCTAssertEqual(a.pixelsHigh, b.pixelsHigh)
+
+        var differing = 0
+        for x in stride(from: 0, to: a.pixelsWide, by: 2) {
+            for y in stride(from: 0, to: a.pixelsHigh, by: 2) {
+                guard let left = a.colorAt(x: x, y: y), let right = b.colorAt(x: x, y: y) else { continue }
+                let delta = abs(left.redComponent - right.redComponent)
+                    + abs(left.greenComponent - right.greenComponent)
+                    + abs(left.blueComponent - right.blueComponent)
+                if delta > 0.1 { differing += 1 }
+            }
+        }
+        let sampled = (a.pixelsWide / 2) * (a.pixelsHigh / 2)
+        return Double(differing) / Double(max(sampled, 1))
     }
 
     func testHelpWindowsRender() throws {

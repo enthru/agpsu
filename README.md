@@ -5,6 +5,11 @@ Keysight system DC power supplies over RS-232:
 
 **66312A · 66332A · 6631B · 6632B · 6633B · 6634B · 6611C · 6612C · 6613C · 6614C**
 
+![The main window driving a simulated 6632B at 12 V into a load that holds it in
+constant current: the readout across the top, the instrument's facts in the
+strip below it, the control boxes in two columns on the left, and the live
+voltage trace over the event list on the right](screen.jpg)
+
 **Пользоваться программой:** [руководство на русском](docs/guide.ru.md) — от
 кабеля и настроек порта до защит, строки меню и Shortcuts.
 
@@ -203,7 +208,9 @@ the window.
   minima and maxima preserved, so a 2M-sample graph stays responsive and spikes
   still show; exports contain every retained sample. Axis labels are formatted
   rather than left to the viewer's locale — a comma-decimal Mac would otherwise
-  put "4,19" on the axis above a readout saying "4.190V".
+  put "4,19" on the axis above a readout saying "4.190V" — and their colour comes
+  from the plot rather than from the system appearance, which in dark mode was
+  drawing white numbers on the white field the themes paint.
 - The window resizes into its space: two columns of controls when there is width
   for them, one when there is not, and a scroller that appears only when
   something is actually below the fold.

@@ -10,20 +10,44 @@ enum PanelColor: String, CaseIterable, Identifiable, Sendable {
 
     var title: String { rawValue.capitalized }
 
-    var color: Color {
+    var components: (red: Double, green: Double, blue: Double) {
         switch self {
-        case .green: return Color(red: 0.10, green: 0.80, blue: 0.30)
-        case .blue: return Color(red: 0.16, green: 0.50, blue: 0.95)
-        case .cyan: return Color(red: 0.10, green: 0.68, blue: 0.94)
-        case .red: return Color(red: 0.92, green: 0.22, blue: 0.20)
-        case .yellow: return Color(red: 0.95, green: 0.80, blue: 0.10)
-        case .orange: return Color(red: 0.98, green: 0.55, blue: 0.10)
-        case .white: return .white
-        case .black: return .black
-        case .pink: return Color(red: 0.96, green: 0.40, blue: 0.65)
-        case .violet: return Color(red: 0.60, green: 0.35, blue: 0.92)
-        case .gray: return Color(white: 0.35)
+        case .green: return (0.10, 0.80, 0.30)
+        case .blue: return (0.16, 0.50, 0.95)
+        case .cyan: return (0.10, 0.68, 0.94)
+        case .red: return (0.92, 0.22, 0.20)
+        case .yellow: return (0.95, 0.80, 0.10)
+        case .orange: return (0.98, 0.55, 0.10)
+        case .white: return (1.00, 1.00, 1.00)
+        case .black: return (0.00, 0.00, 0.00)
+        case .pink: return (0.96, 0.40, 0.65)
+        case .violet: return (0.60, 0.35, 0.92)
+        case .gray: return (0.35, 0.35, 0.35)
         }
+    }
+
+    var color: Color {
+        let rgb = components
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    }
+
+    /// Rec. 709 luminance, which is what decides whether black or white can be
+    /// read on top of this colour.
+    var luminance: Double {
+        let rgb = components
+        return 0.2126 * rgb.red + 0.7152 * rgb.green + 0.0722 * rgb.blue
+    }
+
+    /// What to draw *on* this colour.
+    ///
+    /// Chart axis labels take the environment's foreground colour, which in
+    /// dark mode is white — and the graph themes paint a white plot. The axis
+    /// numbers were being drawn white on white and simply were not there. The
+    /// plot is a chosen colour rather than a themed surface, so what goes on
+    /// top of it has to be chosen from the same place rather than from the
+    /// system appearance.
+    var contrastingInk: Color {
+        luminance > 0.5 ? .black : .white
     }
 }
 

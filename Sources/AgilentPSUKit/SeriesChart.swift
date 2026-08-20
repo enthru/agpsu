@@ -123,22 +123,24 @@ struct SeriesChart: View {
             // instrument graphs read better with it on the left, as ScottPlot
             // drew it.
             AxisMarks(position: .leading, values: .automatic(desiredCount: isCompact ? 4 : 6)) { mark in
-                AxisGridLine()
-                AxisTick()
+                AxisGridLine().foregroundStyle(plotInk.opacity(0.22))
+                AxisTick().foregroundStyle(plotInk.opacity(0.5))
                 AxisValueLabel {
                     if let value = mark.as(Double.self) {
                         Text(AxisNumber.label(value, decimals: yDecimals))
+                            .foregroundStyle(figureInk)
                     }
                 }
             }
         }
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: isCompact ? 4 : 6)) { mark in
-                AxisGridLine()
-                AxisTick()
+                AxisGridLine().foregroundStyle(plotInk.opacity(0.22))
+                AxisTick().foregroundStyle(plotInk.opacity(0.5))
                 AxisValueLabel {
                     if let value = mark.as(Double.self) {
                         Text(AxisNumber.label(value, decimals: xDecimals))
+                            .foregroundStyle(figureInk)
                     }
                 }
             }
@@ -149,11 +151,19 @@ struct SeriesChart: View {
         // The compact pane has a header saying which series it is and in what
         // unit, so the axis titles would only repeat it into a space that is
         // already short.
-        .chartXAxisLabel(isCompact ? "" : settings.xAxis.title)
+        .chartXAxisLabel(alignment: .center) {
+            Text(isCompact ? "" : settings.xAxis.title).foregroundStyle(figureInk)
+        }
         .chartYAxisLabel(position: .leading) {
-            Text(isCompact ? "" : "\(seriesName) ( \(unit) )")
+            Text(isCompact ? "" : "\(seriesName) ( \(unit) )").foregroundStyle(figureInk)
         }
     }
+
+    /// Gridlines and ticks lie on the plot; the numbers beside them lie on the
+    /// figure around it. The two are separately chosen colours and can differ —
+    /// a black theme with a white plot is one of the presets.
+    private var plotInk: Color { settings.plotBackground.contrastingInk }
+    private var figureInk: Color { settings.figureBackground.contrastingInk }
 
     private var yDecimals: Int {
         let domain = yDomain
